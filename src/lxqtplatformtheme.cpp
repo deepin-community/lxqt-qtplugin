@@ -76,10 +76,8 @@ LXQtPlatformTheme::LXQtPlatformTheme():
 }
 
 LXQtPlatformTheme::~LXQtPlatformTheme() {
-    if(LXQtPalette_)
-        delete LXQtPalette_;
-    if(settingsWatcher_)
-        delete settingsWatcher_;
+    delete LXQtPalette_;
+    delete settingsWatcher_;
 }
 
 void LXQtPlatformTheme::lazyInit()
@@ -149,7 +147,7 @@ void LXQtPlatformTheme::loadSettings() {
     color = highlightedTextColor_;
     highlightedTextColor_.setNamedColor(settings.value(QLatin1String("highlighted_text_color")).toString());
     if (!paletteChanged_)
-        paletteChanged_ = color != highlightedTextColor_.isValid() && color != highlightedTextColor_;
+        paletteChanged_ = highlightedTextColor_.isValid() && color != highlightedTextColor_;
 
     color = linkColor_;
     linkColor_.setNamedColor(settings.value(QLatin1String("link_color")).toString());
@@ -163,8 +161,7 @@ void LXQtPlatformTheme::loadSettings() {
 
     if(paletteChanged_)
     {
-        if(LXQtPalette_)
-            delete LXQtPalette_;
+        delete LXQtPalette_;
         // This sets all colors appropriately but valid custom colors are set below.
         // If a custom color is not valid, Qt's calculated color will be used.
         LXQtPalette_ = new QPalette(winColor_);
@@ -172,8 +169,17 @@ void LXQtPlatformTheme::loadSettings() {
         if (baseColor_.isValid())
         {
             LXQtPalette_->setColor(QPalette::Base, baseColor_);
-            // See Qt -> qpalette.cpp -> qt_fusionPalette()
-            LXQtPalette_->setColor(QPalette::Disabled, QPalette::Base, winColor_);
+            // Qt makes the alternate base color (used by some item views) by mixing the button
+            // color (= window color) and base color. That can result in unreadable texts when
+            // the base and window colors have a high contrast with each other.
+            color = baseColor_;
+            int l = color.lightness();
+            if (l < 127)
+                l += 10;
+            else
+                l -= 10;
+            color.setHsl(color.hue(), color.saturation(), l);
+            LXQtPalette_->setColor(QPalette::AlternateBase, color);
         }
         if (highlightColor_.isValid())
         {
@@ -282,11 +288,11 @@ void LXQtPlatformTheme::onSettingsChanged() {
     if(style_ != oldStyle || paletteChanged_) // the widget style or palette is changed
     {
         // ask Qt5 to apply the new style
-        if(auto app = qobject_cast<QApplication *>(QCoreApplication::instance()))
+        if(auto *app = qobject_cast<QApplication *>(QCoreApplication::instance()))
         {
             QApplication::setStyle(style_);
             // Qt 5.15 needs this and it's safe otherwise
-            if(LXQtPalette_)
+            if(LXQtPalette_ != nullptr)
             {
                 QApplication::setPalette(*LXQtPalette_);
                 // the app should be polished because the style may have an internal palette
@@ -332,7 +338,7 @@ void LXQtPlatformTheme::onSettingsChanged() {
 
 bool LXQtPlatformTheme::usePlatformNativeDialog(DialogType type) const {
     if(type == FileDialog
-       && qobject_cast<QApplication *>(QCoreApplication::instance())) { // QML may not have qApp
+       && (qobject_cast<QApplication *>(QCoreApplication::instance()) != nullptr)) { // QML may not have qApp
         // use our own file dialog
         return true;
     }
@@ -342,7 +348,7 @@ bool LXQtPlatformTheme::usePlatformNativeDialog(DialogType type) const {
 
 QPlatformDialogHelper *LXQtPlatformTheme::createPlatformDialogHelper(DialogType type) const {
     if(type == FileDialog
-       && qobject_cast<QApplication *>(QCoreApplication::instance())) { // QML may not have qApp
+       && (qobject_cast<QApplication *>(QCoreApplication::instance()) != nullptr)) { // QML may not have qApp
         // use our own file dialog provided by libfm
 
         // When a process has this environment set, that means glib event loop integration is disabled.
@@ -362,7 +368,7 @@ QPlatformDialogHelper *LXQtPlatformTheme::createPlatformDialogHelper(DialogType 
 
             // try to resolve the symbol to get the function pointer
             createFileDialogHelper = reinterpret_cast<CreateFileDialogHelperFunc>(libfmQtLibrary.resolve("createFileDialogHelper"));
-            if(!createFileDialogHelper) {
+            if(createFileDialogHelper == nullptr) {
                 return nullptr;
             }
         }
@@ -375,7 +381,7 @@ QPlatformDialogHelper *LXQtPlatformTheme::createPlatformDialogHelper(DialogType 
 
 const QPalette *LXQtPlatformTheme::palette(Palette type) const {
     if(type == QPlatformTheme::SystemPalette) {
-        if(LXQtPalette_)
+        if(LXQtPalette_ != nullptr)
             return LXQtPalette_;
     }
     return nullptr;
@@ -461,10 +467,8 @@ QVariant LXQtPlatformTheme::themeHint(ThemeHint hint) const {
         break;
     case WheelScrollLines:
         return wheelScrollLines_;
-#if QT_VERSION >= QT_VERSION_CHECK(5, 10, 0)
     case QPlatformTheme::ShowShortcutsInContextMenus:
         return QVariant(true);
-#endif
     default:
         break;
     }
@@ -498,7 +502,7 @@ QStringList LXQtPlatformTheme::xdgIconThemePaths() const
     xdgDirs.append(xdgDataDirs);
 
     for (const auto &s: xdgDirs) {
-        const QStringList r = s.split(QLatin1Char(':'), QString::SkipEmptyParts);
+        const QStringList r = s.split(QLatin1Char(':'), Qt::SkipEmptyParts);
         for (const auto& xdgDir: r) {
             const QFileInfo xdgIconsDir(xdgDir + QStringLiteral("/icons"));
             if (xdgIconsDir.isDir())

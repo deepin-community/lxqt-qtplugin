@@ -36,6 +36,7 @@
 #include <QString>
 #include <QFileSystemWatcher>
 #include <QFont>
+#include <QColor>
 
 class Q_GUI_EXPORT LXQtPlatformTheme : public QObject, public QPlatformTheme {
     Q_OBJECT
@@ -91,6 +92,7 @@ private:
     // LXQt settings
     QString iconTheme_;
     Qt::ToolButtonStyle toolButtonStyle_;
+    int toolBarIconSize_;
     bool singleClickActivate_;
     bool iconFollowColorScheme_;
 
@@ -99,7 +101,8 @@ private:
     QString style_;
     QColor winColor_, baseColor_, highlightColor_,
            winTextColor_, textColor_, highlightedTextColor_,
-           linkColor_, linkVisitedColor_;
+           linkColor_, linkVisitedColor_,
+           tooltipBaseCol_, tooltipTextCol_;
     bool paletteChanged_;
     QString fontStr_;
     QFont font_;
@@ -108,8 +111,12 @@ private:
     // mouse
     QVariant doubleClickInterval_;
     QVariant wheelScrollLines_;
+    // mouse cursor
+    QVariant mouseCursorTheme_;
+    QSize mouseCursorSize_;
     // keyboard
     QVariant cursorFlashTime_;
+
     QFileSystemWatcher *settingsWatcher_;
     QString settingsFile_;
 

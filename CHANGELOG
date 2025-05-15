@@ -1,3 +1,48 @@
+lxqt-qtplugin-2.1.0 / 2024-11-05
+=================================
+ * Use lxqt-build-tools functionality.
+ * Remove a comment artifact.
+ * Don't mix const with non const iterators.
+ * Avoid possible detach in range-based loop.
+ * Added tooltip colors to palette.
+ * Set toolbar icon size.
+
+lxqt-qtplugin-2.0.0 / 2024-04-17
+=================================
+ * Ported to Qt6.
+ * Check the existence of qApp.
+ * Set mouse cursor theme and size.
+ * Set hover effect.
+ * Added link to libdbusmenu-lxqt in `README.md`.
+
+lxqt-qtplugin-1.4.0 / 2023-11-05
+=================================
+ * Just corrected a case of code readability and bumped the version.
+
+lxqt-qtplugin-1.3.0 / 2023-04-15
+=================================
+ * Bumped the version to 1.3.0 and updated the dependencies.
+
+lxqt-qtplugin-1.2.0 / 2022-11-05
+=================================
+ * Bumped the version to 1.2.0 and updated the dependencies.
+
+lxqt-qtplugin-1.1.0 / 2022-04-15
+=================================
+ * Just bumped the version to 1.1.0 and updated the dependencies.
+
+lxqt-qtplugin-1.0.0 / 2021-11-04
+=================================
+ * Added workarounds for Qt's poor handling of some dark palettes.
+ * Used the C++11 override specifier.
+
+lxqt-qtplugin-0.17.0 / 2021-04-15
+=================================
+  * Handled Qt 5.15 deprecations.
+  * Don't check before deleting a pointer.
+  * Don't use implicit conversions.
+  * Fixed a palette/highlight color related typo.
+
 lxqt-qtplugin-0.16.0 / 2020-11-01
 =================================
   * Do not reset widget palettes on changing style.

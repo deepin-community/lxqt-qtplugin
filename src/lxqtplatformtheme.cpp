@@ -47,6 +47,8 @@
 #include <private/xdgiconloader/xdgiconloader_p.h>
 #include <QLibrary>
 
+#include <utility>
+
 
 // Function to create a new Fm::FileDialogHelper object.
 // This is dynamically loaded at runtime on demand from libfm-qt.
@@ -76,10 +78,8 @@ LXQtPlatformTheme::LXQtPlatformTheme():
 }
 
 LXQtPlatformTheme::~LXQtPlatformTheme() {
-    if(LXQtPalette_)
-        delete LXQtPalette_;
-    if(settingsWatcher_)
-        delete settingsWatcher_;
+    delete LXQtPalette_;
+    delete settingsWatcher_;
 }
 
 void LXQtPlatformTheme::lazyInit()
@@ -113,6 +113,11 @@ void LXQtPlatformTheme::loadSettings() {
     else
         toolButtonStyle_ = static_cast<Qt::ToolButtonStyle>(value);
 
+    // toolbar icon size
+    toolBarIconSize_ = qBound(0, settings.value(QLatin1String("tool_bar_icon_size")).toInt(), 48);
+    if (toolBarIconSize_ < 16)
+        toolBarIconSize_ = 0; // let the style decide
+
     // single click activation
     singleClickActivate_ = settings.value(QLatin1String("single_click_activate")).toBool();
 
@@ -121,50 +126,59 @@ void LXQtPlatformTheme::loadSettings() {
     paletteChanged_ = false;
 
     QColor color = winColor_;
-    winColor_.setNamedColor(settings.value(QLatin1String("window_color"), QLatin1String("#efefef")).toString());
+    winColor_ = QColor::fromString(settings.value(QLatin1String("window_color"), QLatin1String("#efefef")).toString());
     if(!winColor_.isValid())
-        winColor_.setNamedColor(QStringLiteral("#efefef"));
+        winColor_ = QColor::fromString(QStringLiteral("#efefef"));
     paletteChanged_ = color != winColor_;
 
     color = baseColor_;
-    baseColor_.setNamedColor(settings.value(QLatin1String("base_color")).toString());
+    baseColor_ = QColor::fromString(settings.value(QLatin1String("base_color")).toString());
     if (!paletteChanged_)
         paletteChanged_ = baseColor_.isValid() && color != baseColor_;
 
     color = highlightColor_;
-    highlightColor_.setNamedColor(settings.value(QLatin1String("highlight_color")).toString());
+    highlightColor_ = QColor::fromString(settings.value(QLatin1String("highlight_color")).toString());
     if (!paletteChanged_)
         paletteChanged_ = highlightColor_.isValid() && color != highlightColor_;
 
     color = winTextColor_;
-    winTextColor_.setNamedColor(settings.value(QLatin1String("window_text_color")).toString());
+    winTextColor_ = QColor::fromString(settings.value(QLatin1String("window_text_color")).toString());
     if (!paletteChanged_)
         paletteChanged_ = winTextColor_.isValid() && color != winTextColor_;
 
     color = textColor_;
-    textColor_.setNamedColor(settings.value(QLatin1String("text_color")).toString());
+    textColor_ = QColor::fromString(settings.value(QLatin1String("text_color")).toString());
     if (!paletteChanged_)
         paletteChanged_ = textColor_.isValid() && color != textColor_;
 
     color = highlightedTextColor_;
-    highlightedTextColor_.setNamedColor(settings.value(QLatin1String("highlighted_text_color")).toString());
+    highlightedTextColor_ = QColor::fromString(settings.value(QLatin1String("highlighted_text_color")).toString());
     if (!paletteChanged_)
-        paletteChanged_ = color != highlightedTextColor_.isValid() && color != highlightedTextColor_;
+        paletteChanged_ = highlightedTextColor_.isValid() && color != highlightedTextColor_;
 
     color = linkColor_;
-    linkColor_.setNamedColor(settings.value(QLatin1String("link_color")).toString());
+    linkColor_ = QColor::fromString(settings.value(QLatin1String("link_color")).toString());
     if (!paletteChanged_)
         paletteChanged_ = linkColor_.isValid() && color != linkColor_;
 
     color = linkVisitedColor_;
-    linkVisitedColor_.setNamedColor(settings.value(QLatin1String("link_visited_color")).toString());
+    linkVisitedColor_ = QColor::fromString(settings.value(QLatin1String("link_visited_color")).toString());
     if (!paletteChanged_)
         paletteChanged_ = linkVisitedColor_.isValid() && color != linkVisitedColor_;
 
+    color = tooltipBaseCol_;
+    tooltipBaseCol_ = QColor::fromString(settings.value(QLatin1String("tooltip_base_color")).toString());
+    if (!paletteChanged_)
+        paletteChanged_ = tooltipBaseCol_.isValid() && color != tooltipBaseCol_;
+
+    color = tooltipTextCol_;
+    tooltipTextCol_ = QColor::fromString(settings.value(QLatin1String("tooltip_text_color")).toString());
+    if (!paletteChanged_)
+        paletteChanged_ = tooltipTextCol_.isValid() && color != tooltipTextCol_;
+
     if(paletteChanged_)
     {
-        if(LXQtPalette_)
-            delete LXQtPalette_;
+        delete LXQtPalette_;
         // This sets all colors appropriately but valid custom colors are set below.
         // If a custom color is not valid, Qt's calculated color will be used.
         LXQtPalette_ = new QPalette(winColor_);
@@ -172,8 +186,17 @@ void LXQtPlatformTheme::loadSettings() {
         if (baseColor_.isValid())
         {
             LXQtPalette_->setColor(QPalette::Base, baseColor_);
-            // See Qt -> qpalette.cpp -> qt_fusionPalette()
-            LXQtPalette_->setColor(QPalette::Disabled, QPalette::Base, winColor_);
+            // Qt makes the alternate base color (used by some item views) by mixing the button
+            // color (= window color) and base color. That can result in unreadable texts when
+            // the base and window colors have a high contrast with each other.
+            color = baseColor_;
+            int l = color.lightness();
+            if (l < 127)
+                l += 10;
+            else
+                l -= 10;
+            color.setHsl(color.hue(), color.saturation(), l);
+            LXQtPalette_->setColor(QPalette::AlternateBase, color);
         }
         if (highlightColor_.isValid())
         {
@@ -216,6 +239,10 @@ void LXQtPlatformTheme::loadSettings() {
             LXQtPalette_->setColor(QPalette::Link, linkColor_);
         if (linkVisitedColor_.isValid())
             LXQtPalette_->setColor(QPalette::LinkVisited, linkVisitedColor_);
+        if (tooltipBaseCol_.isValid())
+            LXQtPalette_->setColor(QPalette::ToolTipBase, tooltipBaseCol_);
+        if (tooltipTextCol_.isValid())
+            LXQtPalette_->setColor(QPalette::ToolTipText, tooltipTextCol_);
     }
     settings.endGroup();
 
@@ -227,9 +254,13 @@ void LXQtPlatformTheme::loadSettings() {
 
     // SystemFont
     fontStr_ = settings.value(QLatin1String("font")).toString();
+
     if(!fontStr_.isEmpty()) {
-        if(font_.fromString(fontStr_))
-            QApplication::setFont(font_); // it seems that we need to do this manually.
+        if(font_.fromString(fontStr_)) {
+            if(qobject_cast<QApplication *>(QCoreApplication::instance())) {
+                QApplication::setFont(font_); // it seems that we need to do this manually.
+            }
+        }
     }
 
     // FixedFont
@@ -245,6 +276,14 @@ void LXQtPlatformTheme::loadSettings() {
     // keyboard
     cursorFlashTime_ = settings.value(QLatin1String("cursorFlashTime"));
     settings.endGroup();
+
+    // mouse cursor
+    QSettings sessionSettings(QSettings::UserScope, QLatin1String("lxqt"), QLatin1String("session"));
+    sessionSettings.beginGroup(QStringLiteral("Mouse"));
+    mouseCursorTheme_ = sessionSettings.value(QLatin1String("cursor_theme"));
+    int curSize = sessionSettings.value(QLatin1String("cursor_size"), 16).toInt();
+    mouseCursorSize_ = QSize(curSize, curSize);
+    sessionSettings.endGroup();
 }
 
 // this is called whenever the config file is changed.
@@ -279,24 +318,23 @@ void LXQtPlatformTheme::onSettingsChanged() {
 
     loadSettings(); // reload the config file
 
-    if(style_ != oldStyle || paletteChanged_) // the widget style or palette is changed
+    auto app = qobject_cast<QApplication *>(QCoreApplication::instance());
+
+    if(app && (style_ != oldStyle || paletteChanged_)) // the widget style or palette is changed
     {
-        // ask Qt5 to apply the new style
-        if(auto app = qobject_cast<QApplication *>(QCoreApplication::instance()))
+        // ask Qt to apply the new style
+        QApplication::setStyle(style_);
+        // Qt 5.15 needs this and it's safe otherwise
+        if(LXQtPalette_ != nullptr)
         {
-            QApplication::setStyle(style_);
-            // Qt 5.15 needs this and it's safe otherwise
-            if(LXQtPalette_)
-            {
-                QApplication::setPalette(*LXQtPalette_);
-                // the app should be polished because the style may have an internal palette
-                QApplication::style()->polish(app);
-            }
+            QApplication::setPalette(*LXQtPalette_);
+            // the app should be polished because the style may have an internal palette
+            QApplication::style()->polish(app);
         }
     }
 
     if(iconTheme_ != oldIconTheme) { // the icon theme is changed
-        XdgIconLoader::instance()->updateSystemTheme(); // this is a private internal API of Qt5.
+        XdgIconLoader::instance()->updateSystemTheme(); // this is a private internal API of Qt.
     }
     XdgIconLoader::instance()->setFollowColorScheme(iconFollowColorScheme_);
 
@@ -315,24 +353,29 @@ void LXQtPlatformTheme::onSettingsChanged() {
         // FIXME: should we call the internal API: QApplicationPrivate::setFont() instead?
         // QGtkStyle does this internally.
         fixedFont_.fromString(fixedFontStr_); // FIXME: how to set this to the app?
-        if(font_.fromString(fontStr_))
-            QApplication::setFont(font_);
+        if(font_.fromString(fontStr_)) {
+            if(app) {
+                QApplication::setFont(font_);
+            }
+        }
     }
 
-    QApplication::setWheelScrollLines(wheelScrollLines_.toInt());
+    if(app) {
+        QApplication::setWheelScrollLines(wheelScrollLines_.toInt());
 
-    // emit a ThemeChange event to all widgets
-    const auto widgets = QApplication::allWidgets();
-    for(QWidget* const widget : widgets) {
-        // Qt5 added a QEvent::ThemeChange event.
-        QEvent event(QEvent::ThemeChange);
-        QApplication::sendEvent(widget, &event);
+        // emit a ThemeChange event to all widgets
+        const auto widgets = QApplication::allWidgets();
+        for(QWidget* const widget : widgets) {
+            // Qt5 added a QEvent::ThemeChange event.
+            QEvent event(QEvent::ThemeChange);
+            QApplication::sendEvent(widget, &event);
+        }
     }
 }
 
 bool LXQtPlatformTheme::usePlatformNativeDialog(DialogType type) const {
     if(type == FileDialog
-       && qobject_cast<QApplication *>(QCoreApplication::instance())) { // QML may not have qApp
+       && (qobject_cast<QApplication *>(QCoreApplication::instance()) != nullptr)) { // QML may not have qApp
         // use our own file dialog
         return true;
     }
@@ -342,7 +385,7 @@ bool LXQtPlatformTheme::usePlatformNativeDialog(DialogType type) const {
 
 QPlatformDialogHelper *LXQtPlatformTheme::createPlatformDialogHelper(DialogType type) const {
     if(type == FileDialog
-       && qobject_cast<QApplication *>(QCoreApplication::instance())) { // QML may not have qApp
+       && (qobject_cast<QApplication *>(QCoreApplication::instance()) != nullptr)) { // QML may not have qApp
         // use our own file dialog provided by libfm
 
         // When a process has this environment set, that means glib event loop integration is disabled.
@@ -362,7 +405,7 @@ QPlatformDialogHelper *LXQtPlatformTheme::createPlatformDialogHelper(DialogType 
 
             // try to resolve the symbol to get the function pointer
             createFileDialogHelper = reinterpret_cast<CreateFileDialogHelperFunc>(libfmQtLibrary.resolve("createFileDialogHelper"));
-            if(!createFileDialogHelper) {
+            if(createFileDialogHelper == nullptr) {
                 return nullptr;
             }
         }
@@ -375,7 +418,7 @@ QPlatformDialogHelper *LXQtPlatformTheme::createPlatformDialogHelper(DialogType 
 
 const QPalette *LXQtPlatformTheme::palette(Palette type) const {
     if(type == QPlatformTheme::SystemPalette) {
-        if(LXQtPalette_)
+        if(LXQtPalette_ != nullptr)
             return LXQtPalette_;
     }
     return nullptr;
@@ -420,7 +463,7 @@ QVariant LXQtPlatformTheme::themeHint(ThemeHint hint) const {
     case ToolButtonStyle:
         return QVariant(toolButtonStyle_);
     case ToolBarIconSize:
-        break;
+        return QVariant(toolBarIconSize_);
     case ItemViewActivateItemOnSingleClick:
         return QVariant(singleClickActivate_);
     case SystemIconThemeName:
@@ -442,10 +485,8 @@ QVariant LXQtPlatformTheme::themeHint(ThemeHint hint) const {
     case KeyboardScheme:
         return QVariant(X11KeyboardScheme);
     case UiEffects:
-        break;
+        return QVariant(static_cast<int>(HoverEffect));
     case SpellCheckUnderlineStyle:
-        break;
-    case TabAllWidgets:
         break;
     case IconPixmapSizes:
         break;
@@ -461,10 +502,12 @@ QVariant LXQtPlatformTheme::themeHint(ThemeHint hint) const {
         break;
     case WheelScrollLines:
         return wheelScrollLines_;
-#if QT_VERSION >= QT_VERSION_CHECK(5, 10, 0)
     case QPlatformTheme::ShowShortcutsInContextMenus:
         return QVariant(true);
-#endif
+    case MouseCursorTheme:
+        return mouseCursorTheme_;
+    case MouseCursorSize:
+        return QVariant(mouseCursorSize_);
     default:
         break;
     }
@@ -497,8 +540,8 @@ QStringList LXQtPlatformTheme::xdgIconThemePaths() const
         xdgDataDirs = QLatin1String("/usr/local/share/:/usr/share/");
     xdgDirs.append(xdgDataDirs);
 
-    for (const auto &s: xdgDirs) {
-        const QStringList r = s.split(QLatin1Char(':'), QString::SkipEmptyParts);
+    for (const auto &s: std::as_const(xdgDirs)) {
+        const QStringList r = s.split(QLatin1Char(':'), Qt::SkipEmptyParts);
         for (const auto& xdgDir: r) {
             const QFileInfo xdgIconsDir(xdgDir + QStringLiteral("/icons"));
             if (xdgIconsDir.isDir())
